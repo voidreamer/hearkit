@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hearkit-audio",
+    "crates/hearkit-transcribe",
+    "crates/hearkit-llm",
+    "crates/hearkit-notify",
+    "crates/hearkit-core",
+    "crates/hearkit-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+reqwest = { version = "0.12", features = ["json"] }
+
+# workspace crates
+hearkit-audio = { path = "crates/hearkit-audio" }
+hearkit-transcribe = { path = "crates/hearkit-transcribe" }
+hearkit-llm = { path = "crates/hearkit-llm" }
+hearkit-notify = { path = "crates/hearkit-notify" }
+hearkit-core = { path = "crates/hearkit-core" }

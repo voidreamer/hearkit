@@ -1,0 +1,23 @@
+[package]
+name = "hearkit-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+hearkit-audio.workspace = true
+hearkit-transcribe.workspace = true
+hearkit-llm.workspace = true
+hearkit-notify.workspace = true
+toml = "0.8"
+dirs = "6"
+crossbeam-channel = "0.5"
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+tracing-subscriber = { workspace = true }

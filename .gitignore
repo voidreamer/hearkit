@@ -1,0 +1,8 @@
+/target
+/models/*.bin
+/models/*.ggml
+node_modules/
+.env
+*.wav
+dist/
+*.DS_Store

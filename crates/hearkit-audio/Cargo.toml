@@ -1,0 +1,17 @@
+[package]
+name = "hearkit-audio"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+tracing.workspace = true
+crossbeam-channel = "0.5"
+hound = "3.5"
+rubato = "0.16"
+cpal = "0.15"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = "0.2"
+screencapturekit-sys = "0.2"

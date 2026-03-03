@@ -1,0 +1,13 @@
+[package]
+name = "hearkit-notify"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+reqwest.workspace = true
+hearkit-llm.workspace = true
+tokio.workspace = true

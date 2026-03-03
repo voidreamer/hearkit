@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hearkit</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .settings-btn {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 20px;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+
+    .settings-btn:hover {
+      color: #fff;
+    }
+
+    .record-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 3px solid #e74c3c;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .record-btn:hover {
+      background: rgba(231, 76, 60, 0.15);
+    }
+
+    .record-btn .inner {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #e74c3c;
+      transition: all 0.2s;
+    }
+
+    .record-btn.recording .inner {
+      border-radius: 4px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .record-btn.recording {
+      border-color: #e74c3c;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+      50% { box-shadow: 0 0 0 12px rgba(231, 76, 60, 0); }
+    }
+
+    .status {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 24px;
+    }
+
+    .status.recording-status {
+      color: #e74c3c;
+    }
+
+    .meetings-list {
+      list-style: none;
+    }
+
+    .meeting-card {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .meeting-card:hover {
+      background: #1a2744;
+    }
+
+    .meeting-title {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .meeting-meta {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .meeting-badges {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #2a3a5c;
+      color: #aaa;
+    }
+
+    .badge.active {
+      background: #1a6b3a;
+      color: #8fefb0;
+    }
+
+    /* Detail view */
+    .detail-view { display: none; }
+    .detail-view.visible { display: block; }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: #5b8bf5;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .transcript-box {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .summary-box {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .action-btn {
+      background: #5b8bf5;
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-right: 8px;
+      margin-bottom: 16px;
+    }
+
+    .action-btn:hover { background: #4a7ae5; }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: #666;
+    }
+
+    /* Settings panel */
+    .settings-view { display: none; }
+    .settings-view.visible { display: block; }
+
+    .settings-section {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .settings-section h3 {
+      font-size: 14px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    .form-group select,
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      padding: 8px 12px;
+      background: #1a1a2e;
+      border: 1px solid #2a3a5c;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: #5b8bf5;
+    }
+
+    .model-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #1a1a2e;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .model-status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .model-status .dot.found { background: #2ecc71; }
+    .model-status .dot.missing { background: #e74c3c; }
+
+    .model-status .path {
+      color: #666;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .save-btn {
+      background: #2ecc71;
+      border: none;
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      width: 100%;
+    }
+
+    .save-btn:hover { background: #27ae60; }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .save-feedback {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 8px;
+      min-height: 20px;
+    }
+
+    .save-feedback.success { color: #2ecc71; }
+    .save-feedback.error { color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- List view -->
+    <div id="list-view">
+      <header>
+        <div class="header-left">
+          <h1>Hearkit</h1>
+          <button class="settings-btn" id="settings-btn" title="Settings">&#9881;</button>
+        </div>
+        <button class="record-btn" id="record-btn">
+          <div class="inner"></div>
+        </button>
+      </header>
+      <div class="status" id="status">Ready to record</div>
+      <ul class="meetings-list" id="meetings-list">
+        <li class="empty-state">No recordings yet. Hit the button to start.</li>
+      </ul>
+    </div>
+
+    <!-- Detail view -->
+    <div class="detail-view" id="detail-view">
+      <button class="back-btn" id="detail-back-btn">&larr; Back</button>
+      <h2 id="detail-title" style="margin-bottom: 8px;"></h2>
+      <div class="meeting-meta" id="detail-meta" style="margin-bottom: 16px;"></div>
+
+      <button class="action-btn" id="btn-transcribe">Transcribe</button>
+      <button class="action-btn" id="btn-analyze">Analyze</button>
+
+      <h3 style="margin-bottom: 8px; color: #aaa; font-size: 13px;">TRANSCRIPT</h3>
+      <div class="transcript-box" id="detail-transcript">No transcript yet.</div>
+
+      <h3 style="margin-bottom: 8px; color: #aaa; font-size: 13px;">SUMMARY</h3>
+      <div class="summary-box" id="detail-summary">No analysis yet.</div>
+    </div>
+
+    <!-- Settings view -->
+    <div class="settings-view" id="settings-view">
+      <button class="back-btn" id="settings-back-btn">&larr; Back</button>
+      <h2 style="margin-bottom: 20px; color: #fff;">Settings</h2>
+
+      <div class="settings-section">
+        <h3>Whisper Model</h3>
+        <div class="form-group">
+          <label>Model Status</label>
+          <div class="model-status" id="model-status">
+            <span class="dot missing"></span>
+            <span>Checking...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>LLM Analysis</h3>
+        <div class="form-group">
+          <label for="llm-provider">Provider</label>
+          <select id="llm-provider">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="api-key">API Key</label>
+          <input type="password" id="api-key" placeholder="Enter your API key" />
+        </div>
+        <div class="form-group">
+          <label for="llm-model">Model</label>
+          <input type="text" id="llm-model" placeholder="e.g. claude-sonnet-4-6" />
+        </div>
+      </div>
+
+      <button class="save-btn" id="save-btn">Save Settings</button>
+      <div class="save-feedback" id="save-feedback"></div>
+    </div>
+  </div>
+
+  <script>
+    let invoke;
+    try {
+      invoke = window.__TAURI__.core.invoke;
+      document.getElementById('status').textContent = 'Ready to record';
+    } catch (e) {
+      document.getElementById('status').textContent = 'Tauri error: ' + e.message;
+    }
+
+    let isRecording = false;
+    let currentMeetingId = null;
+    let timerInterval = null;
+    let recordStart = null;
+
+    // Listen for hotkey-triggered recording toggles
+    try {
+      window.__TAURI__.event.listen('recording-toggled', function(event) {
+        const recording = event.payload;
+        const btn = document.getElementById('record-btn');
+        const status = document.getElementById('status');
+
+        if (recording) {
+          isRecording = true;
+          btn.classList.add('recording');
+          status.classList.add('recording-status');
+          recordStart = Date.now();
+          timerInterval = setInterval(function() {
+            const secs = Math.floor((Date.now() - recordStart) / 1000);
+            const m = String(Math.floor(secs / 60)).padStart(2, '0');
+            const s = String(secs % 60).padStart(2, '0');
+            status.textContent = 'Recording... ' + m + ':' + s;
+          }, 1000);
+          status.textContent = 'Recording... 00:00';
+        } else {
+          isRecording = false;
+          clearInterval(timerInterval);
+          btn.classList.remove('recording');
+          status.classList.remove('recording-status');
+          status.textContent = 'Ready to record';
+          loadMeetings();
+        }
+      });
+    } catch (e) {
+      console.warn('Could not listen for recording-toggled events:', e);
+    }
+
+    // ── Wire up all buttons via addEventListener ──────────────
+
+    document.getElementById('record-btn').addEventListener('click', function() {
+      toggleRecording();
+    });
+
+    document.getElementById('settings-btn').addEventListener('click', function() {
+      showSettings();
+    });
+
+    document.getElementById('detail-back-btn').addEventListener('click', function() {
+      showList();
+    });
+
+    document.getElementById('btn-transcribe').addEventListener('click', function() {
+      doTranscribe();
+    });
+
+    document.getElementById('btn-analyze').addEventListener('click', function() {
+      doAnalyze();
+    });
+
+    document.getElementById('settings-back-btn').addEventListener('click', function() {
+      hideSettings();
+    });
+
+    document.getElementById('save-btn').addEventListener('click', function() {
+      saveSettings();
+    });
+
+    // Use event delegation for dynamically created meeting cards
+    document.getElementById('meetings-list').addEventListener('click', function(e) {
+      const card = e.target.closest('.meeting-card');
+      if (card && card.dataset.id) {
+        showMeeting(card.dataset.id);
+      }
+    });
+
+    // ── Core functions ───────────────────────────────────────
+
+    async function toggleRecording() {
+      const btn = document.getElementById('record-btn');
+      const status = document.getElementById('status');
+
+      if (!invoke) {
+        status.textContent = 'Error: Tauri bridge not available';
+        return;
+      }
+
+      if (!isRecording) {
+        try {
+          const id = await invoke('start_recording');
+          isRecording = true;
+          currentMeetingId = id;
+          btn.classList.add('recording');
+          status.classList.add('recording-status');
+          recordStart = Date.now();
+          timerInterval = setInterval(function() {
+            const secs = Math.floor((Date.now() - recordStart) / 1000);
+            const m = String(Math.floor(secs / 60)).padStart(2, '0');
+            const s = String(secs % 60).padStart(2, '0');
+            status.textContent = 'Recording... ' + m + ':' + s;
+          }, 1000);
+          status.textContent = 'Recording... 00:00';
+        } catch (e) {
+          status.textContent = 'Error: ' + e;
+        }
+      } else {
+        try {
+          clearInterval(timerInterval);
+          status.textContent = 'Stopping...';
+          await invoke('stop_recording');
+          isRecording = false;
+          btn.classList.remove('recording');
+          status.classList.remove('recording-status');
+          status.textContent = 'Ready to record';
+          loadMeetings();
+        } catch (e) {
+          status.textContent = 'Error: ' + e;
+        }
+      }
+    }
+
+    async function loadMeetings() {
+      try {
+        const meetings = await invoke('list_meetings');
+        const list = document.getElementById('meetings-list');
+
+        if (meetings.length === 0) {
+          list.innerHTML = '<li class="empty-state">No recordings yet. Hit the button to start.</li>';
+          return;
+        }
+
+        list.innerHTML = meetings.map(function(m) {
+          return '<li class="meeting-card" data-id="' + m.id + '">'
+            + '<div class="meeting-title">' + m.title + '</div>'
+            + '<div class="meeting-meta">' + new Date(m.started_at).toLocaleString() + ' &middot; ' + formatDuration(m.duration_secs) + '</div>'
+            + '<div class="meeting-badges">'
+            + '<span class="badge ' + (m.has_transcript ? 'active' : '') + '">Transcript</span>'
+            + '<span class="badge ' + (m.has_analysis ? 'active' : '') + '">Analysis</span>'
+            + '</div></li>';
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load meetings:', e);
+      }
+    }
+
+    async function showMeeting(id) {
+      try {
+        const meeting = await invoke('get_meeting', { id: id });
+        currentMeetingId = id;
+
+        document.getElementById('detail-title').textContent = meeting.title;
+        document.getElementById('detail-meta').textContent =
+          new Date(meeting.started_at).toLocaleString() + ' · ' + formatDuration(meeting.duration_secs);
+
+        const transcriptEl = document.getElementById('detail-transcript');
+        if (meeting.transcript) {
+          transcriptEl.textContent = meeting.transcript.segments
+            .map(function(s) { return '[' + s.start.toFixed(1) + 's] ' + s.text; })
+            .join('\n');
+        } else {
+          transcriptEl.textContent = 'No transcript yet.';
+        }
+
+        const summaryEl = document.getElementById('detail-summary');
+        if (meeting.analysis) {
+          var text = meeting.analysis.summary + '\n\n';
+          text += 'Action Items:\n';
+          meeting.analysis.action_items.forEach(function(a) {
+            text += '  - ' + a.description;
+            if (a.assignee) text += ' (' + a.assignee + ')';
+            text += '\n';
+          });
+          summaryEl.textContent = text;
+        } else {
+          summaryEl.textContent = 'No analysis yet.';
+        }
+
+        document.getElementById('btn-transcribe').disabled = !!meeting.transcript;
+        document.getElementById('btn-analyze').disabled = !meeting.transcript || !!meeting.analysis;
+
+        document.getElementById('list-view').style.display = 'none';
+        document.getElementById('detail-view').classList.add('visible');
+      } catch (e) {
+        console.error('Failed to load meeting:', e);
+      }
+    }
+
+    function showList() {
+      document.getElementById('detail-view').classList.remove('visible');
+      document.getElementById('list-view').style.display = 'block';
+      loadMeetings();
+    }
+
+    async function doTranscribe() {
+      if (!currentMeetingId) return;
+      const btn = document.getElementById('btn-transcribe');
+      btn.disabled = true;
+      btn.textContent = 'Transcribing...';
+      try {
+        await invoke('transcribe_meeting', { id: currentMeetingId });
+        await showMeeting(currentMeetingId);
+      } catch (e) {
+        alert('Transcription failed: ' + e);
+      }
+      btn.textContent = 'Transcribe';
+    }
+
+    async function doAnalyze() {
+      if (!currentMeetingId) return;
+      const btn = document.getElementById('btn-analyze');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+      try {
+        await invoke('analyze_meeting', { id: currentMeetingId });
+        await showMeeting(currentMeetingId);
+      } catch (e) {
+        alert('Analysis failed: ' + e);
+      }
+      btn.textContent = 'Analyze';
+    }
+
+    function formatDuration(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return m + 'm ' + s + 's';
+    }
+
+    // ── Settings ──────────────────────────────────────────────
+
+    function updateModelStatus(status) {
+      const el = document.getElementById('model-status');
+      if (status.exists) {
+        el.innerHTML = '<span class="dot found"></span><span>Model <b>' + status.model_name + '</b> found</span>';
+      } else {
+        el.innerHTML = '<span class="dot missing"></span><div><div>Model <b>' + status.model_name + '</b> not found</div><div class="path">' + status.path + '</div></div>';
+      }
+    }
+
+    async function showSettings() {
+      document.getElementById('list-view').style.display = 'none';
+      document.getElementById('settings-view').classList.add('visible');
+      document.getElementById('save-feedback').textContent = '';
+
+      try {
+        const settings = await invoke('get_settings');
+        document.getElementById('llm-provider').value = settings.llm.provider;
+        document.getElementById('api-key').value = settings.llm.api_key || '';
+        document.getElementById('llm-model').value = settings.llm.model;
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+      }
+
+      try {
+        const status = await invoke('check_model_status');
+        updateModelStatus(status);
+      } catch (e) {
+        console.error('Failed to check model status:', e);
+      }
+    }
+
+    function hideSettings() {
+      document.getElementById('settings-view').classList.remove('visible');
+      document.getElementById('list-view').style.display = 'block';
+    }
+
+    async function saveSettings() {
+      const btn = document.getElementById('save-btn');
+      const feedback = document.getElementById('save-feedback');
+      btn.disabled = true;
+      feedback.textContent = '';
+
+      try {
+        const current = await invoke('get_settings');
+
+        current.llm.provider = document.getElementById('llm-provider').value;
+        current.llm.api_key = document.getElementById('api-key').value;
+        current.llm.model = document.getElementById('llm-model').value;
+
+        await invoke('save_settings', { settings: current });
+
+        feedback.textContent = 'Settings saved!';
+        feedback.className = 'save-feedback success';
+
+        try {
+          const status = await invoke('check_model_status');
+          updateModelStatus(status);
+        } catch (e) { /* ignore */ }
+      } catch (e) {
+        feedback.textContent = 'Error: ' + e;
+        feedback.className = 'save-feedback error';
+      }
+      btn.disabled = false;
+    }
+
+    // Load meetings on start
+    loadMeetings();
+  </script>
+</body>
+</html>
