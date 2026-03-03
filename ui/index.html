@@ -310,12 +310,155 @@
 
     .save-feedback.success { color: #2ecc71; }
     .save-feedback.error { color: #e74c3c; }
+
+    /* Onboarding view */
+    #onboarding-view {
+      display: none;
+      text-align: center;
+      padding-top: 40px;
+    }
+
+    #onboarding-view h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .onboarding-subtitle {
+      color: #888;
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    .model-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .model-card {
+      background: #16213e;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .model-card:hover {
+      background: #1a2744;
+    }
+
+    .model-card.selected {
+      border-color: #5b8bf5;
+    }
+
+    .model-card-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .model-card-desc {
+      font-size: 13px;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .model-card-size {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .download-btn {
+      background: #5b8bf5;
+      border: none;
+      color: #fff;
+      padding: 12px 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .download-btn:hover { background: #4a7ae5; }
+    .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .progress-area {
+      display: none;
+      margin-top: 24px;
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 8px;
+      background: #16213e;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: #5b8bf5;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-text {
+      font-size: 13px;
+      color: #aaa;
+    }
+
+    .download-error {
+      display: none;
+      color: #e74c3c;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+
+    .retry-btn {
+      background: none;
+      border: 1px solid #e74c3c;
+      color: #e74c3c;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .retry-btn:hover {
+      background: rgba(231, 76, 60, 0.1);
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- Onboarding view -->
+    <div id="onboarding-view">
+      <h1>Welcome to Hearkit</h1>
+      <p class="onboarding-subtitle">Choose a Whisper model to get started with transcription.</p>
+      <div class="model-cards" id="model-cards"></div>
+      <button class="download-btn" id="download-btn" disabled>Download Model</button>
+      <div class="progress-area" id="progress-area">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-bar-fill"></div>
+        </div>
+        <div class="progress-text" id="progress-text">Starting download...</div>
+      </div>
+      <div class="download-error" id="download-error">
+        <div id="download-error-msg"></div>
+        <button class="retry-btn" id="retry-btn">Retry</button>
+      </div>
+    </div>
+
     <!-- List view -->
-    <div id="list-view">
+    <div id="list-view" style="display: none;">
       <header>
         <div class="header-left">
           <h1>Hearkit</h1>
@@ -689,8 +832,146 @@
       btn.disabled = false;
     }
 
-    // Load meetings on start
-    loadMeetings();
+    // ── Onboarding ─────────────────────────────────────────
+
+    var MODELS = [
+      { name: 'tiny.en', label: 'Tiny', desc: 'Fastest, least accurate. Good for quick tests.', size: '~75 MB' },
+      { name: 'base.en', label: 'Base', desc: 'Fast with decent accuracy.', size: '~142 MB' },
+      { name: 'small.en', label: 'Small', desc: 'Balanced speed and accuracy.', size: '~466 MB' },
+      { name: 'medium.en', label: 'Medium', desc: 'Best accuracy for English. Recommended.', size: '~1.5 GB' },
+    ];
+
+    var selectedModel = null;
+
+    function renderModelCards() {
+      var container = document.getElementById('model-cards');
+      container.innerHTML = MODELS.map(function(m) {
+        return '<div class="model-card" data-model="' + m.name + '">'
+          + '<div class="model-card-name">' + m.label + '</div>'
+          + '<div class="model-card-desc">' + m.desc + '</div>'
+          + '<div class="model-card-size">' + m.size + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    document.getElementById('model-cards').addEventListener('click', function(e) {
+      var card = e.target.closest('.model-card');
+      if (!card) return;
+      // Deselect all
+      document.querySelectorAll('.model-card').forEach(function(c) { c.classList.remove('selected'); });
+      card.classList.add('selected');
+      selectedModel = card.dataset.model;
+      document.getElementById('download-btn').disabled = false;
+    });
+
+    document.getElementById('download-btn').addEventListener('click', function() {
+      startModelDownload();
+    });
+
+    document.getElementById('retry-btn').addEventListener('click', function() {
+      startModelDownload();
+    });
+
+    function formatBytes(bytes) {
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    async function startModelDownload() {
+      if (!selectedModel || !invoke) return;
+
+      var downloadBtn = document.getElementById('download-btn');
+      var progressArea = document.getElementById('progress-area');
+      var errorArea = document.getElementById('download-error');
+      var progressFill = document.getElementById('progress-bar-fill');
+      var progressText = document.getElementById('progress-text');
+
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = 'Downloading...';
+      progressArea.style.display = 'block';
+      errorArea.style.display = 'none';
+      progressFill.style.width = '0%';
+      progressText.textContent = 'Starting download...';
+
+      // Disable model card selection during download
+      document.querySelectorAll('.model-card').forEach(function(c) {
+        c.style.pointerEvents = 'none';
+        c.style.opacity = '0.6';
+      });
+
+      try {
+        await invoke('download_model', { modelName: selectedModel });
+        // Success — transition to main view
+        progressText.textContent = 'Download complete!';
+        progressFill.style.width = '100%';
+        setTimeout(function() {
+          document.getElementById('onboarding-view').style.display = 'none';
+          document.getElementById('list-view').style.display = 'block';
+          loadMeetings();
+        }, 500);
+      } catch (e) {
+        downloadBtn.textContent = 'Download Model';
+        downloadBtn.disabled = false;
+        progressArea.style.display = 'none';
+        errorArea.style.display = 'block';
+        document.getElementById('download-error-msg').textContent = 'Download failed: ' + e;
+        // Re-enable model cards
+        document.querySelectorAll('.model-card').forEach(function(c) {
+          c.style.pointerEvents = '';
+          c.style.opacity = '';
+        });
+      }
+    }
+
+    // Listen for download progress events
+    try {
+      window.__TAURI__.event.listen('model-download-progress', function(event) {
+        var p = event.payload;
+        var progressFill = document.getElementById('progress-bar-fill');
+        var progressText = document.getElementById('progress-text');
+        progressFill.style.width = p.percent.toFixed(1) + '%';
+        if (p.total > 0) {
+          progressText.textContent = formatBytes(p.downloaded) + ' / ' + formatBytes(p.total) + ' (' + p.percent.toFixed(0) + '%)';
+        } else {
+          progressText.textContent = formatBytes(p.downloaded) + ' downloaded';
+        }
+      });
+    } catch (e) {
+      console.warn('Could not listen for model-download-progress events:', e);
+    }
+
+    // ── Startup ──────────────────────────────────────────────
+
+    async function initApp() {
+      renderModelCards();
+
+      if (!invoke) return;
+
+      try {
+        var status = await invoke('check_model_status');
+        if (status.exists) {
+          // Model present — go straight to main view
+          document.getElementById('list-view').style.display = 'block';
+          loadMeetings();
+        } else {
+          // No model — show onboarding, pre-select medium.en
+          document.getElementById('onboarding-view').style.display = 'block';
+          var mediumCard = document.querySelector('.model-card[data-model="medium.en"]');
+          if (mediumCard) {
+            mediumCard.classList.add('selected');
+            selectedModel = 'medium.en';
+            document.getElementById('download-btn').disabled = false;
+          }
+        }
+      } catch (e) {
+        // On error, default to showing onboarding
+        document.getElementById('onboarding-view').style.display = 'block';
+        renderModelCards();
+      }
+    }
+
+    initApp();
   </script>
 </body>
 </html>

@@ -143,6 +143,7 @@ fn main() {
             commands::get_settings,
             commands::save_settings,
             commands::check_model_status,
+            commands::download_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running hearkit");

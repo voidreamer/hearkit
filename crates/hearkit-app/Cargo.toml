@@ -14,6 +14,8 @@ hearkit-core.workspace = true
 hearkit-llm.workspace = true
 hearkit-notify.workspace = true
 hearkit-transcribe.workspace = true
+reqwest.workspace = true
+futures-util.workspace = true
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-notification = "2"

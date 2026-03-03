@@ -1,7 +1,8 @@
+use futures_util::StreamExt;
 use hearkit_core::config::AppConfig;
 use hearkit_core::{Meeting, MeetingSummary};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::state::{self, AppState};
 
@@ -206,4 +207,112 @@ pub fn check_model_status(state: State<'_, AppState>) -> Result<ModelStatus, Str
         path: model_path.display().to_string(),
         model_name: config.transcription.model.clone(),
     })
+}
+
+// ── Model download command ───────────────────────────────────────────
+
+#[derive(Clone, Serialize)]
+struct DownloadProgress {
+    downloaded: u64,
+    total: u64,
+    percent: f64,
+}
+
+const ALLOWED_MODELS: &[&str] = &["tiny.en", "base.en", "small.en", "medium.en"];
+
+#[tauri::command]
+pub async fn download_model(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    model_name: String,
+) -> Result<(), String> {
+    if !ALLOWED_MODELS.contains(&model_name.as_str()) {
+        return Err(format!(
+            "invalid model: {model_name}. Allowed: {}",
+            ALLOWED_MODELS.join(", ")
+        ));
+    }
+
+    // Resolve target path from current config's data_dir
+    let (models_dir, target_path) = {
+        let pipeline = state.pipeline.lock().map_err(|e| e.to_string())?;
+        let config = pipeline.config();
+        let dir = config.data_dir().join("models");
+        let path = dir.join(format!("ggml-{model_name}.bin"));
+        (dir, path)
+    };
+
+    // Create models directory if needed
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| format!("failed to create models directory: {e}"))?;
+
+    let part_path = target_path.with_extension("bin.part");
+    let url = format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"
+    );
+
+    tracing::info!("downloading model from {url}");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("download request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("download failed with status {}", response.status()));
+    }
+
+    let total = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+
+    let mut file = std::fs::File::create(&part_path)
+        .map_err(|e| format!("failed to create temp file: {e}"))?;
+
+    use std::io::Write;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("download stream error: {e}"))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("failed to write model data: {e}"))?;
+        downloaded += chunk.len() as u64;
+
+        let percent = if total > 0 {
+            (downloaded as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let _ = app_handle.emit(
+            "model-download-progress",
+            DownloadProgress {
+                downloaded,
+                total,
+                percent,
+            },
+        );
+    }
+
+    drop(file);
+
+    // Atomic rename
+    std::fs::rename(&part_path, &target_path)
+        .map_err(|e| format!("failed to finalize model file: {e}"))?;
+
+    tracing::info!("model downloaded to {}", target_path.display());
+
+    // Update config with selected model, save, and init transcriber
+    {
+        let mut pipeline = state.pipeline.lock().map_err(|e| e.to_string())?;
+        let mut config = pipeline.config().clone();
+        config.transcription.model = model_name.clone();
+        config
+            .save(&state.config_path)
+            .map_err(|e| format!("failed to save config: {e}"))?;
+        pipeline.set_config(config.clone());
+        state::init_transcriber(&config, &mut pipeline);
+    }
+
+    Ok(())
 }
