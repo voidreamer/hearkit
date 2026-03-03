@@ -41,7 +41,8 @@
     "category": "Productivity",
     "macOS": {
       "minimumSystemVersion": "13.0",
-      "entitlements": "Entitlements.plist"
+      "entitlements": "Entitlements.plist",
+      "infoPlist": "Info.plist"
     },
     "linux": {
       "appimage": {
