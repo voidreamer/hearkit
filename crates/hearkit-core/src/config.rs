@@ -16,6 +16,12 @@ pub struct AppConfig {
     pub app: AppSettings,
     #[serde(default)]
     pub mattermost: MattermostSettings,
+    #[serde(default)]
+    pub slack: SlackSettings,
+    #[serde(default)]
+    pub discord: DiscordSettings,
+    #[serde(default)]
+    pub email: EmailSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +108,39 @@ pub struct MattermostSettings {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SlackSettings {
+    pub webhook_url: String,
+    pub channel: String,
+    pub username: String,
+    pub icon_emoji: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DiscordSettings {
+    pub webhook_url: String,
+    pub username: String,
+    pub avatar_url: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct EmailSettings {
+    /// "smtp" or "resend"
+    pub provider: String,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub from_address: String,
+    pub to_addresses: String,
+    pub use_tls: bool,
+    /// Resend API key (only used when provider = "resend")
+    pub resend_api_key: String,
+    pub enabled: bool,
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -111,6 +150,9 @@ impl Default for AppConfig {
             storage: StorageSettings::default(),
             app: AppSettings::default(),
             mattermost: MattermostSettings::default(),
+            slack: SlackSettings::default(),
+            discord: DiscordSettings::default(),
+            email: EmailSettings::default(),
         }
     }
 }

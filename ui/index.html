@@ -14,6 +14,22 @@
       min-height: 100vh;
     }
 
+    /* 1. Smooth view transitions */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    #list-view, .detail-view.visible, .settings-view.visible, #onboarding-view {
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    /* 2. Custom dark-theme scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a3a5c; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a4f7a; }
+
     .container {
       max-width: 720px;
       margin: 0 auto;
@@ -110,17 +126,22 @@
       list-style: none;
     }
 
+    /* 3. Meeting card hover polish */
     .meeting-card {
       background: #16213e;
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 12px;
       cursor: pointer;
-      transition: background 0.2s;
+      border-left: 3px solid transparent;
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s, border-color 0.2s;
     }
 
     .meeting-card:hover {
       background: #1a2744;
+      border-left-color: #5b8bf5;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     .meeting-title {
@@ -157,6 +178,7 @@
     .detail-view { display: none; }
     .detail-view.visible { display: block; }
 
+    /* 9. Back button polish */
     .back-btn {
       background: none;
       border: none;
@@ -164,6 +186,13 @@
       cursor: pointer;
       font-size: 14px;
       margin-bottom: 16px;
+      transition: transform 0.15s, text-decoration 0.15s;
+      text-decoration: none;
+    }
+
+    .back-btn:hover {
+      transform: translateX(-2px);
+      text-decoration: underline;
     }
 
     .transcript-box {
@@ -186,6 +215,51 @@
       line-height: 1.6;
     }
 
+    /* 12. Better summary rendering */
+    .summary-box h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ccc;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .summary-box h4:first-child {
+      margin-top: 0;
+    }
+
+    .summary-box ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .summary-box ul li {
+      padding: 4px 0 4px 16px;
+      position: relative;
+      color: #ccc;
+    }
+
+    .summary-box ul li::before {
+      content: '\2022';
+      position: absolute;
+      left: 0;
+      color: #5b8bf5;
+    }
+
+    .summary-box p {
+      margin-bottom: 8px;
+      color: #ccc;
+    }
+
+    .summary-box .assignee-tag {
+      font-size: 12px;
+      color: #5b8bf5;
+      font-weight: 500;
+    }
+
+    /* 5. Action button polish */
     .action-btn {
       background: #5b8bf5;
       border: none;
@@ -196,15 +270,64 @@
       font-size: 13px;
       margin-right: 8px;
       margin-bottom: 16px;
+      transition: background 0.2s, transform 0.15s;
+      position: relative;
     }
 
-    .action-btn:hover { background: #4a7ae5; }
+    .action-btn:hover:not(:disabled) {
+      background: #4a7ae5;
+      transform: translateY(-1px);
+    }
+
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    .action-btn.loading {
+      color: transparent;
+      pointer-events: none;
+    }
+
+    .action-btn.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: btnSpin 0.6s linear infinite;
+    }
+
+    @keyframes btnSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 6. Better empty state */
     .empty-state {
       text-align: center;
-      padding: 48px;
-      color: #666;
+      padding: 64px 48px;
+      color: #555;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .empty-state-icon {
+      display: block;
+      margin: 0 auto 16px;
+      opacity: 0.3;
+    }
+
+    .empty-state-title {
+      font-size: 17px;
+      font-weight: 500;
+      color: #777;
+      margin-bottom: 6px;
+    }
+
+    .empty-state-sub {
+      font-size: 13px;
+      color: #555;
     }
 
     /* Settings panel */
@@ -218,12 +341,53 @@
       margin-bottom: 16px;
     }
 
+    /* 7. Settings section headings */
     .settings-section h3 {
       font-size: 14px;
       color: #aaa;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2a3a5c;
+    }
+
+    /* 11. Collapsible notification settings */
+    .settings-section h3.collapsible {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+      margin-bottom: 0;
+      transition: margin-bottom 0.2s;
+    }
+
+    .settings-section h3.collapsible.expanded {
+      margin-bottom: 16px;
+    }
+
+    .settings-section h3.collapsible .chevron {
+      display: inline-block;
+      font-size: 10px;
+      transition: transform 0.2s;
+      color: #666;
+    }
+
+    .settings-section h3.collapsible.expanded .chevron {
+      transform: rotate(90deg);
+    }
+
+    .settings-section .collapsible-body {
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.2s ease;
+    }
+
+    .settings-section .collapsible-body.expanded {
+      max-height: 600px;
+      opacity: 1;
     }
 
     .form-group {
@@ -241,6 +405,7 @@
       margin-bottom: 6px;
     }
 
+    /* 8. Input focus glow */
     .form-group select,
     .form-group input[type="text"],
     .form-group input[type="password"] {
@@ -252,12 +417,66 @@
       color: #e0e0e0;
       font-size: 14px;
       font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .form-group select:focus,
     .form-group input:focus {
       outline: none;
       border-color: #5b8bf5;
+      box-shadow: 0 0 0 3px rgba(91, 139, 245, 0.15);
+    }
+
+    /* 4. Toggle switches */
+    .toggle-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .toggle-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      width: 36px;
+      height: 20px;
+      background: #2a3a5c;
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #888;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: #5b8bf5;
+    }
+
+    .toggle-switch input:checked + .toggle-slider::after {
+      transform: translateX(16px);
+      background: #fff;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: #ccc;
     }
 
     .model-status {
@@ -401,12 +620,14 @@
       margin-bottom: 12px;
     }
 
+    /* 10. Progress bar glow */
     .progress-bar-fill {
       height: 100%;
       background: #5b8bf5;
       border-radius: 4px;
       width: 0%;
       transition: width 0.3s;
+      box-shadow: 0 0 8px rgba(91, 139, 245, 0.5), 0 0 2px rgba(91, 139, 245, 0.3);
     }
 
     .progress-text {
@@ -470,7 +691,11 @@
       </header>
       <div class="status" id="status">Ready to record</div>
       <ul class="meetings-list" id="meetings-list">
-        <li class="empty-state">No recordings yet. Hit the button to start.</li>
+        <li class="empty-state">
+          <svg class="empty-state-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <div class="empty-state-title">No recordings yet</div>
+          <div class="empty-state-sub">Hit the record button to get started</div>
+        </li>
       </ul>
     </div>
 
@@ -513,6 +738,7 @@
           <select id="llm-provider">
             <option value="claude">Claude (Anthropic)</option>
             <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini (Google)</option>
           </select>
         </div>
         <div class="form-group">
@@ -522,6 +748,144 @@
         <div class="form-group">
           <label for="llm-model">Model</label>
           <input type="text" id="llm-model" placeholder="e.g. claude-sonnet-4-6" />
+        </div>
+      </div>
+
+      <div class="settings-section" data-notify-section="mattermost">
+        <h3 class="collapsible" data-toggle="mm-body"><span>Mattermost Notifications</span> <span class="chevron">&#9654;</span></h3>
+        <div class="collapsible-body" id="mm-body">
+        <div class="form-group">
+          <label for="mm-webhook">Webhook URL</label>
+          <input type="text" id="mm-webhook" placeholder="https://mattermost.example.com/hooks/..." />
+        </div>
+        <div class="form-group">
+          <label for="mm-channel">Channel (optional)</label>
+          <input type="text" id="mm-channel" placeholder="e.g. town-square" />
+        </div>
+        <div class="form-group">
+          <label for="mm-username">Bot Username (optional)</label>
+          <input type="text" id="mm-username" placeholder="e.g. hearkit-bot" />
+        </div>
+        <div class="form-group">
+          <label class="toggle-switch">
+            <input type="checkbox" id="mm-enabled" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enabled</span>
+          </label>
+        </div>
+        </div>
+      </div>
+
+      <div class="settings-section" data-notify-section="slack">
+        <h3 class="collapsible" data-toggle="slack-body"><span>Slack Notifications</span> <span class="chevron">&#9654;</span></h3>
+        <div class="collapsible-body" id="slack-body">
+        <div class="form-group">
+          <label for="slack-webhook">Webhook URL</label>
+          <input type="text" id="slack-webhook" placeholder="https://hooks.slack.com/services/..." />
+        </div>
+        <div class="form-group">
+          <label for="slack-channel">Channel (optional)</label>
+          <input type="text" id="slack-channel" placeholder="e.g. #general" />
+        </div>
+        <div class="form-group">
+          <label for="slack-username">Bot Username (optional)</label>
+          <input type="text" id="slack-username" placeholder="e.g. hearkit-bot" />
+        </div>
+        <div class="form-group">
+          <label for="slack-icon-emoji">Icon Emoji (optional)</label>
+          <input type="text" id="slack-icon-emoji" placeholder="e.g. :robot_face:" />
+        </div>
+        <div class="form-group">
+          <label class="toggle-switch">
+            <input type="checkbox" id="slack-enabled" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enabled</span>
+          </label>
+        </div>
+        </div>
+      </div>
+
+      <div class="settings-section" data-notify-section="discord">
+        <h3 class="collapsible" data-toggle="discord-body"><span>Discord Notifications</span> <span class="chevron">&#9654;</span></h3>
+        <div class="collapsible-body" id="discord-body">
+        <div class="form-group">
+          <label for="discord-webhook">Webhook URL</label>
+          <input type="text" id="discord-webhook" placeholder="https://discord.com/api/webhooks/..." />
+        </div>
+        <div class="form-group">
+          <label for="discord-username">Bot Username (optional)</label>
+          <input type="text" id="discord-username" placeholder="e.g. hearkit-bot" />
+        </div>
+        <div class="form-group">
+          <label for="discord-avatar-url">Avatar URL (optional)</label>
+          <input type="text" id="discord-avatar-url" placeholder="https://example.com/avatar.png" />
+        </div>
+        <div class="form-group">
+          <label class="toggle-switch">
+            <input type="checkbox" id="discord-enabled" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enabled</span>
+          </label>
+        </div>
+        </div>
+      </div>
+
+      <div class="settings-section" data-notify-section="email">
+        <h3 class="collapsible" data-toggle="email-body"><span>Email Notifications</span> <span class="chevron">&#9654;</span></h3>
+        <div class="collapsible-body" id="email-body">
+        <div class="form-group">
+          <label for="email-provider">Provider</label>
+          <select id="email-provider">
+            <option value="resend">Resend (free, recommended)</option>
+            <option value="smtp">SMTP (custom server)</option>
+          </select>
+        </div>
+        <div id="email-resend-fields">
+          <div class="form-group">
+            <label for="email-resend-api-key">Resend API Key</label>
+            <input type="password" id="email-resend-api-key" placeholder="re_..." />
+          </div>
+        </div>
+        <div id="email-smtp-fields" style="display: none;">
+          <div class="form-group">
+            <label for="email-smtp-host">SMTP Host</label>
+            <input type="text" id="email-smtp-host" placeholder="e.g. smtp.gmail.com" />
+          </div>
+          <div class="form-group">
+            <label for="email-smtp-port">SMTP Port</label>
+            <input type="text" id="email-smtp-port" placeholder="e.g. 587" />
+          </div>
+          <div class="form-group">
+            <label for="email-smtp-username">Username</label>
+            <input type="text" id="email-smtp-username" placeholder="e.g. user@example.com" />
+          </div>
+          <div class="form-group">
+            <label for="email-smtp-password">Password</label>
+            <input type="password" id="email-smtp-password" placeholder="SMTP password or app password" />
+          </div>
+          <div class="form-group">
+            <label class="toggle-switch">
+              <input type="checkbox" id="email-use-tls" />
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Use TLS</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="email-from">From Address</label>
+          <input type="text" id="email-from" placeholder="e.g. hearkit@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="email-to">To Addresses (comma-separated)</label>
+          <input type="text" id="email-to" placeholder="e.g. team@example.com, manager@example.com" />
+        </div>
+        <div class="form-group">
+          <label class="toggle-switch">
+            <input type="checkbox" id="email-enabled" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enabled</span>
+          </label>
+        </div>
         </div>
       </div>
 
@@ -606,6 +970,15 @@
       saveSettings();
     });
 
+    document.getElementById('email-provider').addEventListener('change', function() {
+      toggleEmailProvider(this.value);
+    });
+
+    function toggleEmailProvider(provider) {
+      document.getElementById('email-resend-fields').style.display = provider === 'resend' ? '' : 'none';
+      document.getElementById('email-smtp-fields').style.display = provider === 'smtp' ? '' : 'none';
+    }
+
     // Use event delegation for dynamically created meeting cards
     document.getElementById('meetings-list').addEventListener('click', function(e) {
       const card = e.target.closest('.meeting-card');
@@ -647,12 +1020,16 @@
         try {
           clearInterval(timerInterval);
           status.textContent = 'Stopping...';
-          await invoke('stop_recording');
+          const meeting = await invoke('stop_recording');
           isRecording = false;
           btn.classList.remove('recording');
           status.classList.remove('recording-status');
           status.textContent = 'Ready to record';
           loadMeetings();
+          // If live transcription produced a transcript, jump straight to detail
+          if (meeting && meeting.transcript) {
+            showMeeting(meeting.id);
+          }
         } catch (e) {
           status.textContent = 'Error: ' + e;
         }
@@ -665,7 +1042,11 @@
         const list = document.getElementById('meetings-list');
 
         if (meetings.length === 0) {
-          list.innerHTML = '<li class="empty-state">No recordings yet. Hit the button to start.</li>';
+          list.innerHTML = '<li class="empty-state">'
+            + '<svg class="empty-state-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
+            + '<div class="empty-state-title">No recordings yet</div>'
+            + '<div class="empty-state-sub">Hit the record button to get started</div>'
+            + '</li>';
           return;
         }
 
@@ -703,14 +1084,32 @@
 
         const summaryEl = document.getElementById('detail-summary');
         if (meeting.analysis) {
-          var text = meeting.analysis.summary + '\n\n';
-          text += 'Action Items:\n';
-          meeting.analysis.action_items.forEach(function(a) {
-            text += '  - ' + a.description;
-            if (a.assignee) text += ' (' + a.assignee + ')';
-            text += '\n';
-          });
-          summaryEl.textContent = text;
+          var html = '<h4>Summary</h4>';
+          html += '<p>' + escapeHtml(meeting.analysis.summary) + '</p>';
+          if (meeting.analysis.action_items && meeting.analysis.action_items.length > 0) {
+            html += '<h4>Action Items</h4><ul>';
+            meeting.analysis.action_items.forEach(function(a) {
+              html += '<li>' + escapeHtml(a.description);
+              if (a.assignee) html += ' <span class="assignee-tag">@' + escapeHtml(a.assignee) + '</span>';
+              html += '</li>';
+            });
+            html += '</ul>';
+          }
+          if (meeting.analysis.key_topics && meeting.analysis.key_topics.length > 0) {
+            html += '<h4>Key Topics</h4><ul>';
+            meeting.analysis.key_topics.forEach(function(t) {
+              html += '<li>' + escapeHtml(t) + '</li>';
+            });
+            html += '</ul>';
+          }
+          if (meeting.analysis.decisions && meeting.analysis.decisions.length > 0) {
+            html += '<h4>Decisions</h4><ul>';
+            meeting.analysis.decisions.forEach(function(d) {
+              html += '<li>' + escapeHtml(d) + '</li>';
+            });
+            html += '</ul>';
+          }
+          summaryEl.innerHTML = html;
         } else {
           summaryEl.textContent = 'No analysis yet.';
         }
@@ -735,13 +1134,14 @@
       if (!currentMeetingId) return;
       const btn = document.getElementById('btn-transcribe');
       btn.disabled = true;
-      btn.textContent = 'Transcribing...';
+      btn.classList.add('loading');
       try {
         await invoke('transcribe_meeting', { id: currentMeetingId });
         await showMeeting(currentMeetingId);
       } catch (e) {
         alert('Transcription failed: ' + e);
       }
+      btn.classList.remove('loading');
       btn.textContent = 'Transcribe';
     }
 
@@ -749,13 +1149,14 @@
       if (!currentMeetingId) return;
       const btn = document.getElementById('btn-analyze');
       btn.disabled = true;
-      btn.textContent = 'Analyzing...';
+      btn.classList.add('loading');
       try {
         await invoke('analyze_meeting', { id: currentMeetingId });
         await showMeeting(currentMeetingId);
       } catch (e) {
         alert('Analysis failed: ' + e);
       }
+      btn.classList.remove('loading');
       btn.textContent = 'Analyze';
     }
 
@@ -763,6 +1164,42 @@
       const m = Math.floor(secs / 60);
       const s = Math.floor(secs % 60);
       return m + 'm ' + s + 's';
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ── Collapsible notification sections ─────────────────────
+
+    document.querySelectorAll('h3.collapsible').forEach(function(h3) {
+      h3.addEventListener('click', function() {
+        var targetId = h3.getAttribute('data-toggle');
+        var body = document.getElementById(targetId);
+        var isExpanded = h3.classList.contains('expanded');
+        if (isExpanded) {
+          h3.classList.remove('expanded');
+          body.classList.remove('expanded');
+        } else {
+          h3.classList.add('expanded');
+          body.classList.add('expanded');
+        }
+      });
+    });
+
+    function setCollapsibleState(bodyId, expanded) {
+      var body = document.getElementById(bodyId);
+      var h3 = document.querySelector('[data-toggle="' + bodyId + '"]');
+      if (!body || !h3) return;
+      if (expanded) {
+        h3.classList.add('expanded');
+        body.classList.add('expanded');
+      } else {
+        h3.classList.remove('expanded');
+        body.classList.remove('expanded');
+      }
     }
 
     // ── Settings ──────────────────────────────────────────────
@@ -776,6 +1213,24 @@
       }
     }
 
+    function updateLlmPlaceholders() {
+      var provider = document.getElementById('llm-provider').value;
+      var keyInput = document.getElementById('api-key');
+      var modelInput = document.getElementById('llm-model');
+      if (provider === 'gemini') {
+        keyInput.placeholder = 'Enter your Gemini API key';
+        modelInput.placeholder = 'e.g. gemini-2.5-flash';
+      } else if (provider === 'openai') {
+        keyInput.placeholder = 'Enter your API key';
+        modelInput.placeholder = 'e.g. gpt-4o';
+      } else {
+        keyInput.placeholder = 'Enter your API key';
+        modelInput.placeholder = 'e.g. claude-sonnet-4-6';
+      }
+    }
+
+    document.getElementById('llm-provider').addEventListener('change', updateLlmPlaceholders);
+
     async function showSettings() {
       document.getElementById('list-view').style.display = 'none';
       document.getElementById('settings-view').classList.add('visible');
@@ -784,8 +1239,40 @@
       try {
         const settings = await invoke('get_settings');
         document.getElementById('llm-provider').value = settings.llm.provider;
+        updateLlmPlaceholders();
         document.getElementById('api-key').value = settings.llm.api_key || '';
         document.getElementById('llm-model').value = settings.llm.model;
+        document.getElementById('mm-webhook').value = settings.mattermost.webhook_url || '';
+        document.getElementById('mm-channel').value = settings.mattermost.channel || '';
+        document.getElementById('mm-username').value = settings.mattermost.username || '';
+        document.getElementById('mm-enabled').checked = !!settings.mattermost.enabled;
+        document.getElementById('slack-webhook').value = settings.slack.webhook_url || '';
+        document.getElementById('slack-channel').value = settings.slack.channel || '';
+        document.getElementById('slack-username').value = settings.slack.username || '';
+        document.getElementById('slack-icon-emoji').value = settings.slack.icon_emoji || '';
+        document.getElementById('slack-enabled').checked = !!settings.slack.enabled;
+        document.getElementById('discord-webhook').value = (settings.discord && settings.discord.webhook_url) || '';
+        document.getElementById('discord-username').value = (settings.discord && settings.discord.username) || '';
+        document.getElementById('discord-avatar-url').value = (settings.discord && settings.discord.avatar_url) || '';
+        document.getElementById('discord-enabled').checked = !!(settings.discord && settings.discord.enabled);
+        var emailProvider = (settings.email && settings.email.provider) || 'resend';
+        document.getElementById('email-provider').value = emailProvider;
+        toggleEmailProvider(emailProvider);
+        document.getElementById('email-resend-api-key').value = (settings.email && settings.email.resend_api_key) || '';
+        document.getElementById('email-smtp-host').value = (settings.email && settings.email.smtp_host) || '';
+        document.getElementById('email-smtp-port').value = (settings.email && settings.email.smtp_port) || '';
+        document.getElementById('email-smtp-username').value = (settings.email && settings.email.smtp_username) || '';
+        document.getElementById('email-smtp-password').value = (settings.email && settings.email.smtp_password) || '';
+        document.getElementById('email-from').value = (settings.email && settings.email.from_address) || '';
+        document.getElementById('email-to').value = (settings.email && settings.email.to_addresses) || '';
+        document.getElementById('email-use-tls').checked = !!(settings.email && settings.email.use_tls);
+        document.getElementById('email-enabled').checked = !!(settings.email && settings.email.enabled);
+
+        // Expand notification sections that are enabled, collapse others
+        setCollapsibleState('mm-body', !!settings.mattermost.enabled);
+        setCollapsibleState('slack-body', !!settings.slack.enabled);
+        setCollapsibleState('discord-body', !!(settings.discord && settings.discord.enabled));
+        setCollapsibleState('email-body', !!(settings.email && settings.email.enabled));
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
@@ -815,6 +1302,33 @@
         current.llm.provider = document.getElementById('llm-provider').value;
         current.llm.api_key = document.getElementById('api-key').value;
         current.llm.model = document.getElementById('llm-model').value;
+        current.mattermost.webhook_url = document.getElementById('mm-webhook').value;
+        current.mattermost.channel = document.getElementById('mm-channel').value;
+        current.mattermost.username = document.getElementById('mm-username').value;
+        current.mattermost.enabled = document.getElementById('mm-enabled').checked;
+        current.slack.webhook_url = document.getElementById('slack-webhook').value;
+        current.slack.channel = document.getElementById('slack-channel').value;
+        current.slack.username = document.getElementById('slack-username').value;
+        current.slack.icon_emoji = document.getElementById('slack-icon-emoji').value;
+        current.slack.enabled = document.getElementById('slack-enabled').checked;
+
+        if (!current.discord) current.discord = {};
+        current.discord.webhook_url = document.getElementById('discord-webhook').value;
+        current.discord.username = document.getElementById('discord-username').value;
+        current.discord.avatar_url = document.getElementById('discord-avatar-url').value;
+        current.discord.enabled = document.getElementById('discord-enabled').checked;
+
+        if (!current.email) current.email = {};
+        current.email.provider = document.getElementById('email-provider').value;
+        current.email.resend_api_key = document.getElementById('email-resend-api-key').value;
+        current.email.smtp_host = document.getElementById('email-smtp-host').value;
+        current.email.smtp_port = parseInt(document.getElementById('email-smtp-port').value) || 0;
+        current.email.smtp_username = document.getElementById('email-smtp-username').value;
+        current.email.smtp_password = document.getElementById('email-smtp-password').value;
+        current.email.from_address = document.getElementById('email-from').value;
+        current.email.to_addresses = document.getElementById('email-to').value;
+        current.email.use_tls = document.getElementById('email-use-tls').checked;
+        current.email.enabled = document.getElementById('email-enabled').checked;
 
         await invoke('save_settings', { settings: current });
 

@@ -1,4 +1,5 @@
 pub mod claude;
+pub mod gemini;
 pub mod openai;
 
 use anyhow::Result;
@@ -39,6 +40,7 @@ pub struct LlmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LlmProvider {
     Claude,
+    Gemini,
     OpenAI,
 }
 

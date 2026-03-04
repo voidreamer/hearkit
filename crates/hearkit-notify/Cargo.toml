@@ -11,3 +11,5 @@ tracing.workspace = true
 reqwest.workspace = true
 hearkit-llm.workspace = true
 tokio.workspace = true
+async-trait.workspace = true
+lettre.workspace = true

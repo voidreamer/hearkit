@@ -111,7 +111,7 @@ pub async fn analyze_meeting(
     id: String,
 ) -> Result<Meeting, String> {
     // Load meeting data while holding the lock, then drop the lock before await
-    let (mut meeting, analyzer, notifier) = {
+    let (mut meeting, analyzer, notifiers) = {
         let pipeline = state.pipeline.lock().map_err(|e| e.to_string())?;
         let meeting = pipeline
             .storage()
@@ -120,8 +120,8 @@ pub async fn analyze_meeting(
         let analyzer = pipeline
             .analyzer()
             .ok_or_else(|| "LLM analyzer not configured — set an API key in settings".to_string())?;
-        let notifier = pipeline.notifier();
-        (meeting, analyzer, notifier)
+        let notifiers = pipeline.notifiers();
+        (meeting, analyzer, notifiers)
     };
 
     let transcript = meeting
@@ -148,10 +148,10 @@ pub async fn analyze_meeting(
             .map_err(|e| e.to_string())?;
     }
 
-    // Post to Mattermost (non-fatal)
-    if let Some(notifier) = notifier {
+    // Post to all configured notifiers (non-fatal)
+    for notifier in &notifiers {
         if let Err(e) = notifier.post_summary(&meeting.title, &analysis).await {
-            tracing::warn!("failed to post summary to Mattermost: {e}");
+            tracing::warn!("failed to post summary to {}: {e}", notifier.name());
         }
     }
 
@@ -183,8 +183,8 @@ pub fn save_settings(state: State<'_, AppState>, settings: AppConfig) -> Result<
     // Reinitialize analyzer with new key/provider
     state::init_analyzer(&settings, &mut pipeline);
 
-    // Reinitialize Mattermost notifier
-    state::init_notifier(&settings, &mut pipeline);
+    // Reinitialize notifiers
+    state::init_notifiers(&settings, &mut pipeline);
 
     tracing::info!("settings saved and engines reinitialized");
     Ok(())

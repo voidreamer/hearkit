@@ -3,13 +3,13 @@ use chrono::Utc;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use hearkit_audio::writer::AudioFileWriter;
 use hearkit_audio::AudioChunk;
 use hearkit_llm::MeetingAnalyzer;
-use hearkit_notify::MattermostNotifier;
+use hearkit_notify::Notifier;
 use hearkit_transcribe::TranscriptionEngine;
 
 use crate::config::AppConfig;
@@ -24,6 +24,8 @@ pub struct RecordingHandle {
     stop_flag: Arc<AtomicBool>,
     capture_thread: Option<thread::JoinHandle<()>>,
     writer_thread: Option<thread::JoinHandle<Result<()>>>,
+    transcriber_thread: Option<thread::JoinHandle<()>>,
+    live_segments: Arc<Mutex<Vec<hearkit_transcribe::Segment>>>,
     started_at: chrono::DateTime<Utc>,
 }
 
@@ -36,7 +38,7 @@ pub struct MeetingPipeline {
     storage: Storage,
     transcriber: Option<Arc<TranscriptionEngine>>,
     analyzer: Option<Arc<dyn MeetingAnalyzer>>,
-    notifier: Option<Arc<MattermostNotifier>>,
+    notifiers: Vec<Arc<dyn Notifier>>,
 }
 
 impl MeetingPipeline {
@@ -46,7 +48,7 @@ impl MeetingPipeline {
             storage,
             transcriber: None,
             analyzer: None,
-            notifier: None,
+            notifiers: Vec::new(),
         }
     }
 
@@ -66,17 +68,17 @@ impl MeetingPipeline {
         self.analyzer = None;
     }
 
-    pub fn set_notifier(&mut self, notifier: MattermostNotifier) {
-        self.notifier = Some(Arc::new(notifier));
+    pub fn set_notifiers(&mut self, notifiers: Vec<Arc<dyn Notifier>>) {
+        self.notifiers = notifiers;
     }
 
-    pub fn clear_notifier(&mut self) {
-        self.notifier = None;
+    pub fn clear_notifiers(&mut self) {
+        self.notifiers.clear();
     }
 
-    /// Get a cloned Arc to the notifier, suitable for use outside a lock.
-    pub fn notifier(&self) -> Option<Arc<MattermostNotifier>> {
-        self.notifier.clone()
+    /// Get cloned Arcs to all notifiers, suitable for use outside a lock.
+    pub fn notifiers(&self) -> Vec<Arc<dyn Notifier>> {
+        self.notifiers.clone()
     }
 
     /// Get a cloned Arc to the transcriber, suitable for use outside a lock.
@@ -112,11 +114,129 @@ impl MeetingPipeline {
         );
         let audio_path = self.storage.recordings_dir().join(&filename);
 
-        let (tx, rx): (Sender<AudioChunk>, Receiver<AudioChunk>) = bounded(1024);
-
         let stop_flag = Arc::new(AtomicBool::new(false));
         let sample_rate = self.config.audio.sample_rate;
         let path_clone = audio_path.clone();
+        let live_segments: Arc<Mutex<Vec<hearkit_transcribe::Segment>>> =
+            Arc::new(Mutex::new(Vec::new()));
+
+        // Decide channel topology based on whether a transcriber is available.
+        let transcriber = self.transcriber.clone();
+        let has_transcriber = transcriber.is_some();
+
+        let (tx_mic, rx_writer, transcriber_thread) = if let Some(transcriber) = transcriber {
+            // Fan-out: mic → fan-out thread → (writer channel, transcriber channel)
+            let (tx_mic, rx_mic): (Sender<AudioChunk>, Receiver<AudioChunk>) = bounded(1024);
+            let (tx_writer, rx_writer): (Sender<AudioChunk>, Receiver<AudioChunk>) = bounded(1024);
+            let (tx_transcribe, rx_transcribe): (Sender<AudioChunk>, Receiver<AudioChunk>) =
+                bounded(1024);
+
+            // Fan-out thread: clones each chunk to both consumers
+            let stop_fo = stop_flag.clone();
+            thread::spawn(move || {
+                loop {
+                    match rx_mic.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(chunk) => {
+                            let _ = tx_writer.send(chunk.clone());
+                            let _ = tx_transcribe.send(chunk);
+                        }
+                        Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                            if stop_fo.load(Ordering::SeqCst) {
+                                while let Ok(chunk) = rx_mic.try_recv() {
+                                    let _ = tx_writer.send(chunk.clone());
+                                    let _ = tx_transcribe.send(chunk);
+                                }
+                                break;
+                            }
+                        }
+                        Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+                // Drop senders so downstream receivers see Disconnected
+                drop(tx_writer);
+                drop(tx_transcribe);
+            });
+
+            // Transcriber thread: accumulates samples, runs whisper every ~30s
+            let segments = live_segments.clone();
+            let stop_tr = stop_flag.clone();
+            let tr_handle = thread::spawn(move || {
+                let chunk_duration_secs: f64 = 30.0;
+                let mut buffer: Vec<f32> = Vec::new();
+                let mut source_sample_rate: u32 = 0;
+                let mut chunk_index: u64 = 0;
+
+                loop {
+                    match rx_transcribe.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(chunk) => {
+                            source_sample_rate = chunk.sample_rate;
+                            buffer.extend_from_slice(&chunk.samples);
+
+                            let threshold =
+                                (source_sample_rate as f64 * chunk_duration_secs) as usize;
+                            if buffer.len() >= threshold {
+                                process_live_chunk(
+                                    &transcriber,
+                                    &buffer,
+                                    source_sample_rate,
+                                    chunk_index,
+                                    chunk_duration_secs,
+                                    &segments,
+                                );
+                                buffer.clear();
+                                chunk_index += 1;
+                            }
+                        }
+                        Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                            if stop_tr.load(Ordering::SeqCst) {
+                                // Drain remaining chunks
+                                while let Ok(chunk) = rx_transcribe.try_recv() {
+                                    source_sample_rate = chunk.sample_rate;
+                                    buffer.extend_from_slice(&chunk.samples);
+                                }
+                                // Process tail
+                                if !buffer.is_empty() && source_sample_rate > 0 {
+                                    process_live_chunk(
+                                        &transcriber,
+                                        &buffer,
+                                        source_sample_rate,
+                                        chunk_index,
+                                        chunk_duration_secs,
+                                        &segments,
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                        Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                            // Process tail
+                            if !buffer.is_empty() && source_sample_rate > 0 {
+                                process_live_chunk(
+                                    &transcriber,
+                                    &buffer,
+                                    source_sample_rate,
+                                    chunk_index,
+                                    chunk_duration_secs,
+                                    &segments,
+                                );
+                            }
+                            break;
+                        }
+                    }
+                }
+                tracing::info!("live transcription finished ({} chunks)", chunk_index + 1);
+            });
+
+            (tx_mic, rx_writer, Some(tr_handle))
+        } else {
+            // No transcriber available — single channel, no fan-out
+            let (tx, rx): (Sender<AudioChunk>, Receiver<AudioChunk>) = bounded(1024);
+            (tx, rx, None)
+        };
+
+        if has_transcriber {
+            tracing::info!("live transcription enabled for this recording");
+        }
 
         // Writer thread: receives audio chunks and writes WAV
         let stop_writer = stop_flag.clone();
@@ -124,12 +244,12 @@ impl MeetingPipeline {
             let mut writer = AudioFileWriter::new(&path_clone, sample_rate)?;
 
             loop {
-                match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                match rx_writer.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(chunk) => writer.write_chunk(&chunk)?,
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                         if stop_writer.load(Ordering::SeqCst) {
                             // Drain remaining
-                            while let Ok(chunk) = rx.try_recv() {
+                            while let Ok(chunk) = rx_writer.try_recv() {
                                 writer.write_chunk(&chunk)?;
                             }
                             break;
@@ -158,7 +278,7 @@ impl MeetingPipeline {
                 }
             };
 
-            if let Err(e) = mic.start(tx) {
+            if let Err(e) = mic.start(tx_mic) {
                 tracing::error!("failed to start mic capture: {e}");
                 return;
             }
@@ -179,11 +299,14 @@ impl MeetingPipeline {
             stop_flag,
             capture_thread: Some(capture_thread),
             writer_thread: Some(writer_thread),
+            transcriber_thread,
+            live_segments,
             started_at: now,
         })
     }
 
     /// Stop recording and return a Meeting with audio path set.
+    /// If a transcriber was active, the meeting already contains the live transcript.
     pub fn stop_recording(&self, mut handle: RecordingHandle) -> Result<Meeting> {
         // Signal everything to stop
         handle.stop_flag.store(true, Ordering::SeqCst);
@@ -202,8 +325,36 @@ impl MeetingPipeline {
                 .map_err(|_| anyhow::anyhow!("writer thread panicked"))??;
         }
 
+        // Wait for transcriber thread to finish processing remaining audio
+        if let Some(thread) = handle.transcriber_thread.take() {
+            thread
+                .join()
+                .map_err(|_| anyhow::anyhow!("transcriber thread panicked"))?;
+        }
+
         let ended_at = Utc::now();
         let duration = (ended_at - handle.started_at).num_milliseconds() as f64 / 1000.0;
+
+        // Collect live-transcribed segments into a Transcript (if any)
+        let transcript = {
+            let segments = handle.live_segments.lock().unwrap();
+            if segments.is_empty() {
+                None
+            } else {
+                let full_text = segments
+                    .iter()
+                    .map(|s| s.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let last_end = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
+                Some(hearkit_transcribe::Transcript {
+                    segments: segments.clone(),
+                    full_text,
+                    language: "en".to_string(),
+                    duration: last_end,
+                })
+            }
+        };
 
         let meeting = Meeting {
             id: handle.id,
@@ -212,9 +363,15 @@ impl MeetingPipeline {
             ended_at,
             duration_secs: duration,
             audio_path: handle.audio_path,
-            transcript: None,
+            transcript: transcript.clone(),
             analysis: None,
         };
+
+        // Save transcript to storage if live transcription produced one
+        if let Some(ref transcript) = meeting.transcript {
+            self.storage.save_transcript(&meeting.id, transcript)?;
+            tracing::info!("live transcript saved ({} segments)", transcript.segments.len());
+        }
 
         self.storage.save_meeting(&meeting)?;
         Ok(meeting)
@@ -251,13 +408,48 @@ impl MeetingPipeline {
         meeting.analysis = Some(analysis.clone());
         self.storage.save_meeting(meeting)?;
 
-        // Post to Mattermost if configured (non-fatal)
-        if let Some(notifier) = &self.notifier {
+        // Post to all configured notifiers (non-fatal)
+        for notifier in &self.notifiers {
             if let Err(e) = notifier.post_summary(&meeting.title, &analysis).await {
-                tracing::warn!("failed to post summary to Mattermost: {e}");
+                tracing::warn!("failed to post summary to {}: {e}", notifier.name());
             }
         }
 
         Ok(())
+    }
+}
+
+/// Resample a buffer to 16kHz and run whisper, appending offset segments to shared vec.
+fn process_live_chunk(
+    transcriber: &TranscriptionEngine,
+    buffer: &[f32],
+    source_sample_rate: u32,
+    chunk_index: u64,
+    chunk_duration_secs: f64,
+    segments: &Arc<Mutex<Vec<hearkit_transcribe::Segment>>>,
+) {
+    let resampled = match hearkit_audio::writer::resample(buffer, source_sample_rate, 16000) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("resample failed for chunk {chunk_index}: {e}");
+            return;
+        }
+    };
+
+    match transcriber.transcribe(&resampled) {
+        Ok(transcript) => {
+            let offset = chunk_index as f64 * chunk_duration_secs;
+            let count = transcript.segments.len();
+            let mut segs = segments.lock().unwrap();
+            for mut seg in transcript.segments {
+                seg.start += offset;
+                seg.end += offset;
+                segs.push(seg);
+            }
+            tracing::debug!("transcribed chunk {chunk_index} ({count} segments)");
+        }
+        Err(e) => {
+            tracing::error!("transcription failed for chunk {chunk_index}: {e}");
+        }
     }
 }

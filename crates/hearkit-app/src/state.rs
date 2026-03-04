@@ -3,7 +3,11 @@ use hearkit_core::config::AppConfig;
 use hearkit_core::pipeline::{MeetingPipeline, RecordingHandle};
 use hearkit_core::storage::Storage;
 use hearkit_llm::LlmConfig;
+use hearkit_notify::discord::DiscordConfig;
+use hearkit_notify::email::EmailConfig;
 use hearkit_notify::mattermost::MattermostConfig;
+use hearkit_notify::slack::SlackConfig;
+use hearkit_notify::Notifier;
 use hearkit_transcribe::TranscribeConfig;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -48,8 +52,8 @@ impl AppState {
         // Try to init LLM analyzer (non-fatal if no key)
         init_analyzer(&config, &mut pipeline);
 
-        // Try to init Mattermost notifier (non-fatal)
-        init_notifier(&config, &mut pipeline);
+        // Try to init notifiers (non-fatal)
+        init_notifiers(&config, &mut pipeline);
 
         Ok(Self {
             pipeline: Mutex::new(pipeline),
@@ -64,6 +68,7 @@ pub fn init_analyzer(config: &AppConfig, pipeline: &mut MeetingPipeline) {
     if let Some(api_key) = config.effective_api_key() {
         let llm_config = LlmConfig {
             provider: match config.llm.provider.as_str() {
+                "gemini" => hearkit_llm::LlmProvider::Gemini,
                 "openai" => hearkit_llm::LlmProvider::OpenAI,
                 _ => hearkit_llm::LlmProvider::Claude,
             },
@@ -73,6 +78,9 @@ pub fn init_analyzer(config: &AppConfig, pipeline: &mut MeetingPipeline) {
         let analyzer: Arc<dyn hearkit_llm::MeetingAnalyzer> = match llm_config.provider {
             hearkit_llm::LlmProvider::Claude => {
                 Arc::new(hearkit_llm::claude::ClaudeAnalyzer::new(llm_config))
+            }
+            hearkit_llm::LlmProvider::Gemini => {
+                Arc::new(hearkit_llm::gemini::GeminiAnalyzer::new(llm_config))
             }
             hearkit_llm::LlmProvider::OpenAI => {
                 Arc::new(hearkit_llm::openai::OpenAIAnalyzer::new(llm_config))
@@ -89,26 +97,79 @@ pub fn init_analyzer(config: &AppConfig, pipeline: &mut MeetingPipeline) {
     }
 }
 
-/// Initialize the Mattermost notifier on a pipeline from the given config.
-pub fn init_notifier(config: &AppConfig, pipeline: &mut MeetingPipeline) {
+/// Initialize all configured notifiers on a pipeline from the given config.
+pub fn init_notifiers(config: &AppConfig, pipeline: &mut MeetingPipeline) {
+    let mut notifiers: Vec<Arc<dyn Notifier>> = Vec::new();
+
+    // Mattermost
     let mm = &config.mattermost;
-    let cfg = MattermostConfig {
+    let mm_cfg = MattermostConfig {
         webhook_url: mm.webhook_url.clone(),
         channel: mm.channel.clone(),
         username: mm.username.clone(),
         icon_url: String::new(),
         enabled: mm.enabled,
     };
-    match hearkit_notify::MattermostNotifier::from_config(&cfg) {
-        Some(notifier) => {
-            tracing::info!("Mattermost notifier initialized");
-            pipeline.set_notifier(notifier);
-        }
-        None => {
-            tracing::info!("Mattermost notifications disabled");
-            pipeline.clear_notifier();
-        }
+    if let Some(notifier) = hearkit_notify::MattermostNotifier::from_config(&mm_cfg) {
+        tracing::info!("Mattermost notifier initialized");
+        notifiers.push(Arc::new(notifier));
+    } else {
+        tracing::info!("Mattermost notifications disabled");
     }
+
+    // Slack
+    let sl = &config.slack;
+    let sl_cfg = SlackConfig {
+        webhook_url: sl.webhook_url.clone(),
+        channel: sl.channel.clone(),
+        username: sl.username.clone(),
+        icon_emoji: sl.icon_emoji.clone(),
+        enabled: sl.enabled,
+    };
+    if let Some(notifier) = hearkit_notify::SlackNotifier::from_config(&sl_cfg) {
+        tracing::info!("Slack notifier initialized");
+        notifiers.push(Arc::new(notifier));
+    } else {
+        tracing::info!("Slack notifications disabled");
+    }
+
+    // Discord
+    let dc = &config.discord;
+    let dc_cfg = DiscordConfig {
+        webhook_url: dc.webhook_url.clone(),
+        username: dc.username.clone(),
+        avatar_url: dc.avatar_url.clone(),
+        enabled: dc.enabled,
+    };
+    if let Some(notifier) = hearkit_notify::DiscordNotifier::from_config(&dc_cfg) {
+        tracing::info!("Discord notifier initialized");
+        notifiers.push(Arc::new(notifier));
+    } else {
+        tracing::info!("Discord notifications disabled");
+    }
+
+    // Email
+    let em = &config.email;
+    let em_cfg = EmailConfig {
+        provider: em.provider.clone(),
+        smtp_host: em.smtp_host.clone(),
+        smtp_port: em.smtp_port,
+        smtp_username: em.smtp_username.clone(),
+        smtp_password: em.smtp_password.clone(),
+        from_address: em.from_address.clone(),
+        to_addresses: em.to_addresses.clone(),
+        use_tls: em.use_tls,
+        resend_api_key: em.resend_api_key.clone(),
+        enabled: em.enabled,
+    };
+    if let Some(notifier) = hearkit_notify::EmailNotifier::from_config(&em_cfg) {
+        tracing::info!("Email notifier initialized");
+        notifiers.push(Arc::new(notifier));
+    } else {
+        tracing::info!("Email notifications disabled");
+    }
+
+    pipeline.set_notifiers(notifiers);
 }
 
 /// Reinitialize the transcription engine on a pipeline from the given config.

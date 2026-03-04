@@ -26,6 +26,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 reqwest = { version = "0.12", features = ["json", "stream"] }
 futures-util = "0.3"
+async-trait = "0.1"
+lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
 
 # workspace crates
 hearkit-audio = { path = "crates/hearkit-audio" }

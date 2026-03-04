@@ -5,21 +5,21 @@ use serde::Serialize;
 
 use crate::Notifier;
 
-/// Sends meeting summaries to a Mattermost channel via incoming webhook.
-pub struct MattermostNotifier {
+/// Sends meeting summaries to a Slack channel via incoming webhook.
+pub struct SlackNotifier {
     webhook_url: String,
     channel: Option<String>,
     username: Option<String>,
-    icon_url: Option<String>,
+    icon_emoji: Option<String>,
     client: reqwest::Client,
 }
 
-/// Configuration needed to construct a `MattermostNotifier`.
-pub struct MattermostConfig {
+/// Configuration needed to construct a `SlackNotifier`.
+pub struct SlackConfig {
     pub webhook_url: String,
     pub channel: String,
     pub username: String,
-    pub icon_url: String,
+    pub icon_emoji: String,
     pub enabled: bool,
 }
 
@@ -31,12 +31,12 @@ struct WebhookPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    icon_url: Option<String>,
+    icon_emoji: Option<String>,
 }
 
-impl MattermostNotifier {
+impl SlackNotifier {
     /// Returns `None` if the feature is disabled or no webhook URL is configured.
-    pub fn from_config(cfg: &MattermostConfig) -> Option<Self> {
+    pub fn from_config(cfg: &SlackConfig) -> Option<Self> {
         if !cfg.enabled || cfg.webhook_url.is_empty() {
             return None;
         }
@@ -49,14 +49,14 @@ impl MattermostNotifier {
             } else {
                 cfg.username.clone()
             }),
-            icon_url: non_empty(&cfg.icon_url),
+            icon_emoji: non_empty(&cfg.icon_emoji),
             client: reqwest::Client::new(),
         })
     }
 }
 
 #[async_trait]
-impl Notifier for MattermostNotifier {
+impl Notifier for SlackNotifier {
     async fn post_summary(&self, meeting_title: &str, analysis: &Analysis) -> Result<()> {
         let text = format_analysis(meeting_title, analysis);
 
@@ -64,7 +64,7 @@ impl Notifier for MattermostNotifier {
             text,
             channel: self.channel.clone(),
             username: self.username.clone(),
-            icon_url: self.icon_url.clone(),
+            icon_emoji: self.icon_emoji.clone(),
         };
 
         let resp = self
@@ -73,20 +73,20 @@ impl Notifier for MattermostNotifier {
             .json(&payload)
             .send()
             .await
-            .context("failed to send Mattermost webhook")?;
+            .context("failed to send Slack webhook")?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Mattermost webhook returned {status}: {body}");
+            anyhow::bail!("Slack webhook returned {status}: {body}");
         }
 
-        tracing::info!("posted meeting summary to Mattermost");
+        tracing::info!("posted meeting summary to Slack");
         Ok(())
     }
 
     fn name(&self) -> &str {
-        "mattermost"
+        "slack"
     }
 }
 
@@ -98,46 +98,48 @@ fn non_empty(s: &str) -> Option<String> {
     }
 }
 
+/// Format an analysis using Slack mrkdwn (no tables, *bold* instead of **bold**).
 fn format_analysis(title: &str, analysis: &Analysis) -> String {
     let mut md = String::new();
 
     // Header
-    md.push_str(&format!("#### :clipboard: Meeting Summary — {title}\n\n"));
+    md.push_str(&format!(":clipboard: *Meeting Summary — {title}*\n\n"));
     md.push_str(&analysis.summary);
     md.push_str("\n\n---\n\n");
 
-    // Action items
+    // Action items (bullet list — Slack webhooks don't render tables)
     if !analysis.action_items.is_empty() {
-        md.push_str("##### :white_check_mark: Action Items\n\n");
-        md.push_str("| Task | Priority | Assignee |\n");
-        md.push_str("|:-----|:---------|:---------|\n");
+        md.push_str(":white_check_mark: *Action Items*\n");
         for item in &analysis.action_items {
             let priority = match &item.priority {
-                Some(Priority::High) => "High",
-                Some(Priority::Medium) => "Medium",
-                Some(Priority::Low) => "Low",
-                None => "—",
+                Some(Priority::High) => " [High]",
+                Some(Priority::Medium) => " [Medium]",
+                Some(Priority::Low) => " [Low]",
+                None => "",
             };
-            let assignee = item.assignee.as_deref().unwrap_or("Unassigned");
-            md.push_str(&format!("| {} | {} | {} |\n", item.description, priority, assignee));
+            let assignee = match &item.assignee {
+                Some(a) => format!(" — {a}"),
+                None => String::new(),
+            };
+            md.push_str(&format!("• {}{}{}\n", item.description, priority, assignee));
         }
         md.push_str("\n---\n\n");
     }
 
     // Key topics
     if !analysis.key_topics.is_empty() {
-        md.push_str("##### :speech_balloon: Key Topics\n");
+        md.push_str(":speech_balloon: *Key Topics*\n");
         for topic in &analysis.key_topics {
-            md.push_str(&format!("- {topic}\n"));
+            md.push_str(&format!("• {topic}\n"));
         }
         md.push('\n');
     }
 
     // Decisions
     if !analysis.decisions.is_empty() {
-        md.push_str("##### :bulb: Decisions\n");
+        md.push_str(":bulb: *Decisions*\n");
         for decision in &analysis.decisions {
-            md.push_str(&format!("- {decision}\n"));
+            md.push_str(&format!("• {decision}\n"));
         }
     }
 
