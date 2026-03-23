@@ -264,32 +264,126 @@ impl MeetingPipeline {
             Ok(())
         });
 
-        // Capture thread: creates and runs MicCapture on its own thread
+        // Capture thread: creates and runs audio capture on its own thread
         // (cpal::Stream is !Send, so it must stay on the thread that created it)
         let stop_capture = stop_flag.clone();
+        let capture_mode = self.config.audio.channels.clone();
+        let capture_sample_rate = sample_rate;
         let capture_thread = thread::spawn(move || {
-            use hearkit_audio::capture::{AudioSource, MicCapture};
+            use hearkit_audio::capture::AudioSource;
 
-            let mut mic = match MicCapture::new() {
-                Ok(m) => m,
-                Err(e) => {
-                    tracing::error!("failed to create mic capture: {e}");
-                    return;
+            let want_mic = capture_mode != "system";
+            let want_system = capture_mode != "mic";
+
+            // Start mic capture
+            let mut mic = if want_mic {
+                match hearkit_audio::capture::MicCapture::new() {
+                    Ok(m) => Some(m),
+                    Err(e) => {
+                        tracing::error!("failed to create mic capture: {e}");
+                        None
+                    }
                 }
+            } else {
+                None
             };
 
-            if let Err(e) = mic.start(tx_mic) {
-                tracing::error!("failed to start mic capture: {e}");
+            // Start system audio capture (macOS only)
+            #[cfg(target_os = "macos")]
+            let mut system = if want_system {
+                match hearkit_audio::capture::system::SystemAudioCapture::new(capture_sample_rate) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        tracing::error!("failed to create system audio capture: {e}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            #[cfg(not(target_os = "macos"))]
+            let mut system: Option<()> = None;
+
+            // If both sources are active, use mixer; otherwise send directly
+            let has_mic = mic.is_some();
+            #[cfg(target_os = "macos")]
+            let has_system = system.is_some();
+            #[cfg(not(target_os = "macos"))]
+            let has_system = false;
+
+            if has_mic && has_system {
+                // Both sources: create per-source channels and a mixer
+                let (tx_mic_raw, rx_mic_raw) = bounded::<AudioChunk>(1024);
+                let (tx_sys_raw, rx_sys_raw) = bounded::<AudioChunk>(1024);
+
+                if let Some(ref mut m) = mic {
+                    if let Err(e) = m.start(tx_mic_raw) {
+                        tracing::error!("failed to start mic capture: {e}");
+                    }
+                }
+                #[cfg(target_os = "macos")]
+                if let Some(ref mut s) = system {
+                    if let Err(e) = s.start(tx_sys_raw) {
+                        tracing::error!("failed to start system audio capture: {e}");
+                    }
+                }
+
+                let mixer = hearkit_audio::mixer::AudioMixer::new(rx_mic_raw, rx_sys_raw);
+                tracing::info!("mixed capture started (mic + system audio)");
+
+                while !stop_capture.load(Ordering::SeqCst) {
+                    let chunks = mixer.drain_mixed(std::time::Duration::from_millis(50));
+                    for chunk in chunks {
+                        let _ = tx_mic.send(chunk);
+                    }
+                    thread::sleep(std::time::Duration::from_millis(50));
+                }
+                // Final drain
+                let chunks = mixer.drain_mixed(std::time::Duration::from_millis(10));
+                for chunk in chunks {
+                    let _ = tx_mic.send(chunk);
+                }
+            } else if has_mic {
+                // Mic only
+                if let Some(ref mut m) = mic {
+                    if let Err(e) = m.start(tx_mic.clone()) {
+                        tracing::error!("failed to start mic capture: {e}");
+                        return;
+                    }
+                }
+                tracing::info!("mic-only capture started");
+                while !stop_capture.load(Ordering::SeqCst) {
+                    thread::sleep(std::time::Duration::from_millis(50));
+                }
+            } else if has_system {
+                // System only
+                #[cfg(target_os = "macos")]
+                if let Some(ref mut s) = system {
+                    if let Err(e) = s.start(tx_mic.clone()) {
+                        tracing::error!("failed to start system audio capture: {e}");
+                        return;
+                    }
+                }
+                tracing::info!("system-only capture started");
+                while !stop_capture.load(Ordering::SeqCst) {
+                    thread::sleep(std::time::Duration::from_millis(50));
+                }
+            } else {
+                tracing::error!("no audio capture source available");
                 return;
             }
 
-            // Block until stop is signaled
-            while !stop_capture.load(Ordering::SeqCst) {
-                thread::sleep(std::time::Duration::from_millis(50));
+            // Stop sources
+            if let Some(ref mut m) = mic {
+                if let Err(e) = m.stop() {
+                    tracing::error!("failed to stop mic capture: {e}");
+                }
             }
-
-            if let Err(e) = mic.stop() {
-                tracing::error!("failed to stop mic capture: {e}");
+            #[cfg(target_os = "macos")]
+            if let Some(ref mut s) = system {
+                if let Err(e) = s.stop() {
+                    tracing::error!("failed to stop system audio capture: {e}");
+                }
             }
         });
 

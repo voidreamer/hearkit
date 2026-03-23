@@ -741,8 +741,15 @@
             <option value="gemini">Gemini (Google)</option>
           </select>
         </div>
+        <div class="form-group" id="claude-auth-type-group">
+          <label for="claude-auth-type">Authentication</label>
+          <select id="claude-auth-type">
+            <option value="api_key">API Key</option>
+            <option value="oauth_token">OAuth Token (Max subscription)</option>
+          </select>
+        </div>
         <div class="form-group">
-          <label for="api-key">API Key</label>
+          <label for="api-key" id="api-key-label">API Key</label>
           <input type="password" id="api-key" placeholder="Enter your API key" />
         </div>
         <div class="form-group">
@@ -1216,20 +1223,35 @@
     function updateLlmPlaceholders() {
       var provider = document.getElementById('llm-provider').value;
       var keyInput = document.getElementById('api-key');
+      var keyLabel = document.getElementById('api-key-label');
       var modelInput = document.getElementById('llm-model');
+      var authTypeGroup = document.getElementById('claude-auth-type-group');
+      var authType = document.getElementById('claude-auth-type').value;
+
+      // Only show auth type selector for Claude
+      authTypeGroup.style.display = provider === 'claude' ? '' : 'none';
+
       if (provider === 'gemini') {
+        keyLabel.textContent = 'API Key';
         keyInput.placeholder = 'Enter your Gemini API key';
         modelInput.placeholder = 'e.g. gemini-2.5-flash';
       } else if (provider === 'openai') {
+        keyLabel.textContent = 'API Key';
         keyInput.placeholder = 'Enter your API key';
         modelInput.placeholder = 'e.g. gpt-4o';
+      } else if (authType === 'oauth_token') {
+        keyLabel.textContent = 'OAuth Token';
+        keyInput.placeholder = 'Enter your OAuth token';
+        modelInput.placeholder = 'e.g. claude-sonnet-4-6';
       } else {
+        keyLabel.textContent = 'API Key';
         keyInput.placeholder = 'Enter your API key';
         modelInput.placeholder = 'e.g. claude-sonnet-4-6';
       }
     }
 
     document.getElementById('llm-provider').addEventListener('change', updateLlmPlaceholders);
+    document.getElementById('claude-auth-type').addEventListener('change', updateLlmPlaceholders);
 
     async function showSettings() {
       document.getElementById('list-view').style.display = 'none';
@@ -1239,6 +1261,7 @@
       try {
         const settings = await invoke('get_settings');
         document.getElementById('llm-provider').value = settings.llm.provider;
+        document.getElementById('claude-auth-type').value = settings.llm.auth_type || 'api_key';
         updateLlmPlaceholders();
         document.getElementById('api-key').value = settings.llm.api_key || '';
         document.getElementById('llm-model').value = settings.llm.model;
@@ -1300,6 +1323,9 @@
         const current = await invoke('get_settings');
 
         current.llm.provider = document.getElementById('llm-provider').value;
+        current.llm.auth_type = document.getElementById('llm-provider').value === 'claude'
+          ? document.getElementById('claude-auth-type').value
+          : 'api_key';
         current.llm.api_key = document.getElementById('api-key').value;
         current.llm.model = document.getElementById('llm-model').value;
         current.mattermost.webhook_url = document.getElementById('mm-webhook').value;

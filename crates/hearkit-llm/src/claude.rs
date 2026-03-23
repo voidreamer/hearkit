@@ -40,12 +40,19 @@ impl MeetingAnalyzer for ClaudeAnalyzer {
             ]
         });
 
-        let resp = self
+        let mut req = self
             .client
             .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.config.api_key)
             .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
+            .header("content-type", "application/json");
+
+        if self.config.use_oauth {
+            req = req.header("Authorization", format!("Bearer {}", self.config.api_key));
+        } else {
+            req = req.header("x-api-key", &self.config.api_key);
+        }
+
+        let resp = req
             .json(&body)
             .send()
             .await

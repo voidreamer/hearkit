@@ -74,6 +74,7 @@ pub fn init_analyzer(config: &AppConfig, pipeline: &mut MeetingPipeline) {
             },
             api_key,
             model: config.llm.model.clone(),
+            use_oauth: config.llm.auth_type == "oauth_token",
         };
         let analyzer: Arc<dyn hearkit_llm::MeetingAnalyzer> = match llm_config.provider {
             hearkit_llm::LlmProvider::Claude => {

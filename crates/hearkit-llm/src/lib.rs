@@ -35,6 +35,8 @@ pub struct LlmConfig {
     pub provider: LlmProvider,
     pub api_key: String,
     pub model: String,
+    /// Whether to use OAuth bearer token auth instead of x-api-key (Claude only)
+    pub use_oauth: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

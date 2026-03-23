@@ -61,6 +61,13 @@ pub struct LlmSettings {
     #[serde(default)]
     pub api_key: String,
     pub model: String,
+    /// "api_key" (default) or "oauth_token" (for Claude Max subscriptions)
+    #[serde(default = "default_auth_type")]
+    pub auth_type: String,
+}
+
+fn default_auth_type() -> String {
+    "api_key".to_string()
 }
 
 impl Default for LlmSettings {
@@ -70,6 +77,7 @@ impl Default for LlmSettings {
             api_key_env: "ANTHROPIC_API_KEY".to_string(),
             api_key: String::new(),
             model: "claude-sonnet-4-6".to_string(),
+            auth_type: "api_key".to_string(),
         }
     }
 }
