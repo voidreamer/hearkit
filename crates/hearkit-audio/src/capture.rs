@@ -129,22 +129,8 @@ impl AudioSource for MicCapture {
 #[cfg(target_os = "macos")]
 pub mod system {
     use super::*;
-    use screencapturekit::cm_sample_buffer::CMSampleBuffer;
-    use screencapturekit::sc_content_filter::{InitParams, SCContentFilter};
-    use screencapturekit::sc_error_handler::StreamErrorHandler;
-    use screencapturekit::sc_output_handler::{SCStreamOutputType, StreamOutput};
-    use screencapturekit::sc_shareable_content::SCShareableContent;
-    use screencapturekit::sc_stream::SCStream;
-    use screencapturekit::sc_stream_configuration::SCStreamConfiguration;
+    use screencapturekit::prelude::*;
     use std::sync::Mutex;
-
-    struct ErrorHandler;
-
-    impl StreamErrorHandler for ErrorHandler {
-        fn on_error(&self) {
-            tracing::error!("system audio stream error");
-        }
-    }
 
     struct AudioOutputHandler {
         sender: Mutex<Sender<AudioChunk>>,
@@ -152,43 +138,49 @@ pub mod system {
         sample_rate: u32,
     }
 
-    impl StreamOutput for AudioOutputHandler {
+    impl SCStreamOutputTrait for AudioOutputHandler {
         fn did_output_sample_buffer(
             &self,
             sample_buffer: CMSampleBuffer,
             of_type: SCStreamOutputType,
         ) {
-            if let SCStreamOutputType::Audio = of_type {
-                let audio_buffers = sample_buffer.sys_ref.get_av_audio_buffer_list();
-                let sample_rate = self.sample_rate;
+            if !matches!(of_type, SCStreamOutputType::Audio) {
+                return;
+            }
 
-                for buffer in audio_buffers {
-                    let channels = buffer.number_channels as usize;
-                    if channels == 0 || buffer.data.is_empty() {
-                        continue;
-                    }
-                    // Data is raw PCM bytes (f32 samples). Convert from &[u8] to &[f32].
-                    let float_samples: Vec<f32> = buffer
-                        .data
-                        .chunks_exact(4)
-                        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-                        .collect();
-                    // Downmix to mono
-                    let mono: Vec<f32> = if channels > 1 {
-                        float_samples
-                            .chunks(channels)
-                            .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-                            .collect()
-                    } else {
-                        float_samples
-                    };
-                    let chunk = AudioChunk {
-                        samples: mono,
-                        sample_rate,
-                        timestamp: self.start_time.elapsed(),
-                    };
-                    let _ = self.sender.lock().unwrap().send(chunk);
+            let audio_buffers = match sample_buffer.audio_buffer_list() {
+                Some(bufs) => bufs,
+                None => return,
+            };
+
+            let sample_rate = self.sample_rate;
+
+            for buffer in &audio_buffers {
+                let channels = buffer.number_channels as usize;
+                let data = buffer.data();
+                if channels == 0 || data.is_empty() {
+                    continue;
                 }
+                // Data is raw PCM bytes (f32 samples). Convert from &[u8] to &[f32].
+                let float_samples: Vec<f32> = data
+                    .chunks_exact(4)
+                    .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                    .collect();
+                // Downmix to mono
+                let mono: Vec<f32> = if channels > 1 {
+                    float_samples
+                        .chunks(channels)
+                        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+                        .collect()
+                } else {
+                    float_samples
+                };
+                let chunk = AudioChunk {
+                    samples: mono,
+                    sample_rate,
+                    timestamp: self.start_time.elapsed(),
+                };
+                let _ = self.sender.lock().unwrap().send(chunk);
             }
         }
     }
@@ -209,31 +201,37 @@ pub mod system {
 
     impl AudioSource for SystemAudioCapture {
         fn start(&mut self, sender: Sender<AudioChunk>) -> Result<()> {
-            let content = SCShareableContent::current();
+            let content = SCShareableContent::get()
+                .map_err(|e| anyhow::anyhow!(
+                    "failed to query system audio sources (screen recording permission may be required): {e}"
+                ))?;
             let display = content
-                .displays
-                .first()
-                .context("no display found")?
-                .clone();
+                .displays()
+                .into_iter()
+                .next()
+                .context("no display found — screen recording permission may be required")?;
 
-            let filter = SCContentFilter::new(InitParams::Display(display));
+            let filter = SCContentFilter::create()
+                .with_display(&display)
+                .with_excluding_windows(&[])
+                .build();
 
-            let config = SCStreamConfiguration {
-                captures_audio: true,
-                excludes_current_process_audio: false,
-                channel_count: 2,
-                sample_rate: self.sample_rate,
-                ..Default::default()
-            };
+            let config = SCStreamConfiguration::new()
+                .with_width(2)
+                .with_height(2)
+                .with_captures_audio(true)
+                .with_excludes_current_process_audio(false)
+                .with_channel_count(2)
+                .with_sample_rate(self.sample_rate as i32);
 
-            let mut stream = SCStream::new(filter, config, ErrorHandler);
+            let mut stream = SCStream::new(&filter, &config);
 
             let output_handler = AudioOutputHandler {
                 sender: Mutex::new(sender),
                 start_time: Instant::now(),
                 sample_rate: self.sample_rate,
             };
-            stream.add_output(output_handler, SCStreamOutputType::Audio);
+            stream.add_output_handler(output_handler, SCStreamOutputType::Audio);
             stream
                 .start_capture()
                 .map_err(|e| anyhow::anyhow!("failed to start system audio capture: {e}"))?;

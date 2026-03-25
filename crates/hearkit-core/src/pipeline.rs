@@ -407,23 +407,28 @@ impl MeetingPipeline {
 
         // Wait for capture thread to finish (this stops the mic)
         if let Some(thread) = handle.capture_thread.take() {
-            thread
-                .join()
-                .map_err(|_| anyhow::anyhow!("capture thread panicked"))?;
+            thread.join().map_err(|e| {
+                let msg = panic_message(&e);
+                anyhow::anyhow!("capture thread panicked: {msg}")
+            })?;
         }
 
         // Wait for writer thread
         if let Some(thread) = handle.writer_thread.take() {
             thread
                 .join()
-                .map_err(|_| anyhow::anyhow!("writer thread panicked"))??;
+                .map_err(|e| {
+                    let msg = panic_message(&e);
+                    anyhow::anyhow!("writer thread panicked: {msg}")
+                })??;
         }
 
         // Wait for transcriber thread to finish processing remaining audio
         if let Some(thread) = handle.transcriber_thread.take() {
-            thread
-                .join()
-                .map_err(|_| anyhow::anyhow!("transcriber thread panicked"))?;
+            thread.join().map_err(|e| {
+                let msg = panic_message(&e);
+                anyhow::anyhow!("transcriber thread panicked: {msg}")
+            })?;
         }
 
         let ended_at = Utc::now();
@@ -510,6 +515,17 @@ impl MeetingPipeline {
         }
 
         Ok(())
+    }
+}
+
+/// Extract a human-readable message from a thread panic payload.
+fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
     }
 }
 
