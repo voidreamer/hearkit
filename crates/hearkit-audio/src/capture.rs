@@ -24,18 +24,14 @@ pub struct MicCapture {
 }
 
 impl MicCapture {
-    pub fn new() -> Result<Self> {
-        let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .context("no input device available")?;
-        let config = device.default_input_config()?;
-
-        Ok(Self {
+    /// Create a new MicCapture without querying the audio device.
+    /// Device access (and the macOS permission prompt) is deferred to `start()`.
+    pub fn new() -> Self {
+        Self {
             stream: None,
-            sample_rate: config.sample_rate().0,
+            sample_rate: 0, // set in start()
             running: Arc::new(AtomicBool::new(false)),
-        })
+        }
     }
 }
 

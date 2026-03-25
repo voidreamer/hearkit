@@ -4,5 +4,7 @@
 <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Hearkit needs microphone access to capture and transcribe audio.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Hearkit needs screen recording permission to capture system audio.</string>
 </dict>
 </plist>

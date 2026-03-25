@@ -277,13 +277,7 @@ impl MeetingPipeline {
 
             // Start mic capture
             let mut mic = if want_mic {
-                match hearkit_audio::capture::MicCapture::new() {
-                    Ok(m) => Some(m),
-                    Err(e) => {
-                        tracing::error!("failed to create mic capture: {e}");
-                        None
-                    }
-                }
+                Some(hearkit_audio::capture::MicCapture::new())
             } else {
                 None
             };
